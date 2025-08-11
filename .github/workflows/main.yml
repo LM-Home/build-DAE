@@ -35,7 +35,37 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
           
+      - name: Check for New Version
+        id: version_check
+        run: |
+          # 获取最新的commit ID
+          newID=$(curl -s -H "Accept: application/json" "https://github.com/daeuniverse/dae/commits/deferred_commit_data/main?original_branch=main" | jq -r '.deferredCommits[0].oid')
+          
+          # 读取上次保存的commit ID（如果存在）
+          oldID=$(cat commentID 2>/dev/null)
+          
+          # 输出获取到的ID用于调试
+          echo "新ID: $newID"
+          echo "旧ID: $oldID"
+          
+          # 保存新ID到环境变量供后续步骤使用
+          echo "newID=$newID" >> $GITHUB_ENV
+          
+          # 判断是否需要继续构建
+          if [ "$newID" = "$oldID" ] && [ -n "$oldID" ]; then
+            echo "未检测到新版本，退出构建"
+            echo "needs_build=false" >> $GITHUB_OUTPUT
+          else
+            echo "检测到新版本，继续构建"
+            echo "needs_build=true" >> $GITHUB_OUTPUT
+            # 如果是首次运行，也保存新ID
+            if [ -z "$oldID" ]; then
+              echo "$newID" > commentID
+            fi
+          fi
+          
       - name: Build Go
+        if: steps.version_check.outputs.needs_build == 'true'
         env:
           BRANCH: ${{ github.event.inputs.branch }}
         run: |
@@ -44,7 +74,7 @@ jobs:
           sudo apt-get install -y llvm-15 clang-15 git make
           export CLANG=clang-15
           
-          # 克隆仓库 - 修复了分支克隆的逻辑错误
+          # 克隆仓库
           if [ -n "${BRANCH}" ]; then
             git clone https://github.com/daeuniverse/dae.git -b ${BRANCH} dae
           else 
@@ -58,6 +88,7 @@ jobs:
           echo "DIR_NAME=$PWD" >> $GITHUB_ENV
   
       - name: Bump Version and Push Tag
+        if: steps.version_check.outputs.needs_build == 'true'
         id: bump
         uses: anothrNick/github-tag-action@v1
         env:
@@ -65,6 +96,7 @@ jobs:
           WITH_V: false
 
       - name: Upload Go to Release
+        if: steps.version_check.outputs.needs_build == 'true'
         uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -72,6 +104,12 @@ jobs:
           tag_name: ${{ steps.bump.outputs.new_tag }}
           files: ${{ env.DIR_NAME }}/dae-amd64
 
+      - name: Update Stored Version ID
+        if: steps.version_check.outputs.needs_build == 'true'
+        run: |
+          # 更新保存的ID为新ID
+          echo "${{ env.newID }}" > commentID
+          
       - name: Delete Workflow Runs
         uses: Mattraks/delete-workflow-runs@v2
         with:
@@ -79,6 +117,7 @@ jobs:
           keep_minimum_runs: 3
 
       - name: Remove Old Releases
+        if: steps.version_check.outputs.needs_build == 'true'
         uses: dev-drprasad/delete-older-releases@v0.1.0
         with:
           keep_latest: 3
