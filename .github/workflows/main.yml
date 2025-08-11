@@ -40,6 +40,7 @@ jobs:
           set -e
           # 获取最新的commit ID
           newID=$(curl -s -H "Accept: application/json" "https://github.com/daeuniverse/dae/commits/deferred_commit_data/main?original_branch=main" | jq -r '.deferredCommits[0].oid')
+          echo "新ID: $newID"
           
           src=$(cat commentIDs 2>/dev/null)
           # 初始化空JSON对象（如果文件不存在）
@@ -50,10 +51,7 @@ jobs:
           if [ "$oldID" = "null" ]; then
             oldID=""
           fi
-          
-          # 输出获取到的ID用于调试
           echo "旧ID: $oldID"
-          echo "新ID: $newID"
           
           # 保存新ID到环境变量供后续步骤使用
           echo "newID=$newID" >> $GITHUB_ENV
