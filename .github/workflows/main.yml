@@ -4,6 +4,10 @@ on:
   repository_dispatch:
   workflow_dispatch:
     inputs:
+      branch:
+        description: '编译特定分支'
+        required: false
+        default: ''
       ssh:
         description: 'SSH Connection to Actions'
         required: false
@@ -23,9 +27,6 @@ jobs:
     name: Build
     runs-on: ${{ matrix.platform }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -41,13 +42,25 @@ jobs:
           bash ngrok.sh
           
       - name: Build Go
+        env:
+          BRANCH: ${{ github.event.inputs.branch }}
         run: |
           set +e
           sudo apt-get update 
           sudo apt-get install -y llvm-15 clang-15 git make
           export CLANG=clang-15
-          make OUTPUT=DAE GOFLAGS="-buildvcs=false" CC=clang CGO_ENABLED=0
-          echo "FILESNAME=$PWD" >> $GITHUB_ENV
+          
+          # 克隆仓库
+          if [ -n "${BRANCH}" ]; then
+            git clone https://github.com/daeuniverse/dae.git dae
+          else 
+            git clone https://github.com/daeuniverse/dae.git -b ${BRANCH} dae
+          fi
+          
+          # 执行构建
+          cd dae
+          make OUTPUT=dae-amd64 GOFLAGS="-buildvcs=false" CC=clang CGO_ENABLED=0
+          echo "DIR_NAME=$PWD" >> $GITHUB_ENV
   
       - name: Bump Version and Push Tag
         id: bump
@@ -62,7 +75,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ steps.bump.outputs.new_tag }}
-          files: ${{ env.FILESNAME }}/DAE
+          files: ${{ env.DIR_NAME }}/dae-amd64
 
       - name: Delete Workflow Runs
         uses: Mattraks/delete-workflow-runs@v2
