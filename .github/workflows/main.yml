@@ -1,7 +1,8 @@
 name: build DAE
 
 on:
-  repository_dispatch:
+  schedule:
+    - cron: '05 1 * * *' # 每天1:05触发
   workflow_dispatch:
     inputs:
       branch:
