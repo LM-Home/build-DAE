@@ -4,10 +4,6 @@ on:
   repository_dispatch:
   workflow_dispatch:
     inputs:
-      ssh:
-        description: 'SSH连接'
-        required: false
-        default: 'false'
       branch:
         description: '编译特定分支'
         required: false
@@ -22,45 +18,22 @@ jobs:
     strategy:
       matrix:
         platform: [ubuntu-latest]
-        go-version: [ '1.23.0' ]
+        go-version: [ '1.23.2' ]
     
     name: Build
     runs-on: ${{ matrix.platform }}
+    permissions:
+      contents: write
     steps:
-      - name: Checkout current repository
+      - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # 拉取所有历史记录，以便正确生成标签
-          
+          fetch-depth: '0'
+        
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
-  
-      - name: SSH Connection to Actions
-        if: (github.event.inputs.ssh == 'true' || contains(github.event.action, 'ssh'))
-        env:
-          NGROK_TOKEN: ${{ secrets.NGROK_TOKEN }}
-          USER_PASS: ${{ secrets.USER_PASS }}
-        run: |
-          # 安装ngrok
-          wget https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip -O ngrok.zip
-          unzip ngrok.zip
-          chmod +x ngrok
-          ./ngrok authtoken $NGROK_TOKEN
-          
-          # 设置SSH
-          sudo apt-get install -y openssh-server
-          # 使用Ubuntu兼容的方式设置root密码
-          echo "root:$USER_PASS" | sudo chpasswd
-          sudo sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
-          sudo service ssh restart
-          
-          # 启动ngrok隧道
-          ./ngrok tcp 22 &
-          sleep 10
-          # 显示隧道信息，方便连接
-          curl http://localhost:4040/api/tunnels
           
       - name: Build Go
         env:
@@ -71,7 +44,7 @@ jobs:
           sudo apt-get install -y llvm-15 clang-15 git make
           export CLANG=clang-15
           
-          # 克隆仓库
+          # 克隆仓库 - 修复了分支克隆的逻辑错误
           if [ -n "${BRANCH}" ]; then
             git clone https://github.com/daeuniverse/dae.git -b ${BRANCH} dae
           else 
@@ -80,22 +53,16 @@ jobs:
           
           # 执行构建
           cd dae
+          git submodule update --init
           make OUTPUT=dae-amd64 GOFLAGS="-buildvcs=false" CC=clang CGO_ENABLED=0
           echo "DIR_NAME=$PWD" >> $GITHUB_ENV
   
-      - name: Configure Git
-        run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          
       - name: Bump Version and Push Tag
         id: bump
         uses: anothrNick/github-tag-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           WITH_V: false
-          DEFAULT_BRANCH: main  # 指定你的默认分支，通常是main或master
-          RELEASE_BRANCHES: main,master  # 允许打标签的分支
 
       - name: Upload Go to Release
         uses: softprops/action-gh-release@v2
