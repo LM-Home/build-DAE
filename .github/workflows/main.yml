@@ -43,13 +43,8 @@ jobs:
           if [ -z "$src" ]; then
             src="{}"
           fi
-          
-          echo $BRANCH
-          
-          IFS=$'\n' read -d '' -ra oldID < <(echo "$src" | jq -r --arg branch "$BRANCH" '.[$branch]')
-          if [ "$oldID" = "null" ]; then
-            oldID=""
-          fi
+
+          oldID=$(echo "$src" | jq -r --arg branch "$BRANCH" '.[$branch] // empty')
           echo "旧ID: $oldID"
 
           # 获取最新的commit ID
