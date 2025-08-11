@@ -8,8 +8,11 @@ on:
       branch:
         description: '编译特定分支'
         required: false
-        default: ''
-
+        default: 'main'
+ 
+env:
+  BRANCH: ${{ github.event.inputs.branch }}
+        
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -37,8 +40,15 @@ jobs:
           # 获取最新的commit ID
           newID=$(curl -s -H "Accept: application/json" "https://github.com/daeuniverse/dae/commits/deferred_commit_data/main?original_branch=main" | jq -r '.deferredCommits[0].oid')
           
-          # 读取上次保存的commit ID（如果存在）
-          oldID=$(cat commentID 2>/dev/null)
+          src=$(cat commentIDs 2>/dev/null)
+          # 初始化空JSON对象（如果文件不存在）
+          if [ -z "$src" ]; then
+            src="{}"
+          fi
+          IFS=$'\n' read -d '' -ra oldID < <(echo "$src" | jq -r --arg branch "$BRANCH" '.[$branch]')
+          if [ "$oldID" = "null" ]; then
+            oldID=""
+          fi
           
           # 输出获取到的ID用于调试
           echo "旧ID: $oldID"
@@ -64,8 +74,6 @@ jobs:
 
       - name: Build Go
         if: steps.version_check.outputs.needs_build == 'true'
-        env:
-          BRANCH: ${{ github.event.inputs.branch }}
         run: |
           set +e
           sudo apt-get update 
@@ -73,16 +81,16 @@ jobs:
           export CLANG=clang-15
           
           # 克隆仓库
-          if [ -n "${BRANCH}" ]; then
-            git clone https://github.com/daeuniverse/dae.git -b ${BRANCH} dae
-          else 
-            git clone https://github.com/daeuniverse/dae.git dae
-          fi
+          git clone https://github.com/daeuniverse/dae.git -b ${BRANCH} dae
           
           # 执行构建
           cd dae
           git submodule update --init
-          make OUTPUT=dae-amd64 GOFLAGS="-buildvcs=false" CC=clang CGO_ENABLED=0
+          # 构建amd64版
+          make OUTPUT=dae-${BRANCH}-amd64 GOARCH=amd64 GOFLAGS="-buildvcs=false" CC=clang CGO_ENABLED=0
+          # 构建arm64版
+          make OUTPUT=dae-${BRANCH}-arm64 GOARCH=arm64 GOFLAGS="-buildvcs=false" CC=clang CGO_ENABLED=0
+
           echo "DIR_NAME=$PWD" >> $GITHUB_ENV
   
       - name: Bump Version and Push Tag
@@ -100,22 +108,27 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ steps.bump.outputs.new_tag }}
-          files: ${{ env.DIR_NAME }}/dae-amd64
+          files: ${{ env.DIR_NAME }}/dae-*
 
       - name: Update Stored Version ID
         if: steps.version_check.outputs.needs_build == 'true'
         run: |
           # 更新保存的ID为新ID
-          echo "${{ env.newID }}" > commentID
+          src=$(cat commentIDs 2>/dev/null)
+          if [ -z "$src" ]; then
+            src="{}"
+          fi
+          echo "$src" | jq --arg branch "$BRANCH" --arg id "${{ env.newID }}" '.[$branch] = $id' > commentIDs
+          
           git config --global user.email 'action@github.com'
           git config --global user.name ${{ github.actor }}
-          git add commentID
+          git add commentIDs
           # 检查是否有文件被修改
           if git diff --staged --quiet; then
             echo -e "文件未被修改。"
             exit 0
           else
-            git commit -m "Update files"
+            git commit -m "Update commentIDs"
             git push
             echo -e "上传文件文件成功。"
           fi
