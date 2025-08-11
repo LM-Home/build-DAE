@@ -29,11 +29,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: '0'
-        
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ matrix.go-version }}
           
       - name: Check for New Version
         id: version_check
@@ -45,8 +40,8 @@ jobs:
           oldID=$(cat commentID 2>/dev/null)
           
           # 输出获取到的ID用于调试
-          echo "新ID: $newID"
           echo "旧ID: $oldID"
+          echo "新ID: $newID"
           
           # 保存新ID到环境变量供后续步骤使用
           echo "newID=$newID" >> $GITHUB_ENV
@@ -58,12 +53,14 @@ jobs:
           else
             echo "检测到新版本，继续构建"
             echo "needs_build=true" >> $GITHUB_OUTPUT
-            # 如果是首次运行，也保存新ID
-            if [ -z "$oldID" ]; then
-              echo "$newID" > commentID
-            fi
           fi
           
+      - name: Setup Go
+        if: steps.version_check.outputs.needs_build == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+
       - name: Build Go
         if: steps.version_check.outputs.needs_build == 'true'
         env:
@@ -109,6 +106,18 @@ jobs:
         run: |
           # 更新保存的ID为新ID
           echo "${{ env.newID }}" > commentID
+          git config --global user.email 'action@github.com'
+          git config --global user.name ${{ github.actor }}
+          git add commentID
+          # 检查是否有文件被修改
+          if git diff --staged --quiet; then
+            echo -e "文件未被修改。"
+            exit 0
+          else
+            git commit -m "Update files"
+            git push
+            echo -e "上传文件文件成功。"
+          fi
           
       - name: Delete Workflow Runs
         uses: Mattraks/delete-workflow-runs@v2
