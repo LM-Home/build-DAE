@@ -37,6 +37,7 @@ jobs:
       - name: Check for New Version
         id: version_check
         run: |
+          set -e
           # 获取最新的commit ID
           newID=$(curl -s -H "Accept: application/json" "https://github.com/daeuniverse/dae/commits/deferred_commit_data/main?original_branch=main" | jq -r '.deferredCommits[0].oid')
           
