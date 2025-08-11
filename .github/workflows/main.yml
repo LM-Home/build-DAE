@@ -38,9 +38,34 @@ jobs:
           NGROK_TOKEN: ${{ secrets.NGROK_TOKEN }}
           USER_PASS: ${{ secrets.USER_PASS }}
         run: |
-          ls
-          chmod +x ngrok.sh
-          bash ngrok.sh
+          # 安装ngrok
+          wget https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip -O ngrok.zip
+          unzip ngrok.zip
+          chmod +x ngrok
+          ./ngrok authtoken $NGROK_TOKEN
+          
+          # 设置SSH
+          sudo apt-get install -y openssh-server
+          echo "$USER_PASS" | sudo passwd root --stdin
+          sudo sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+          sudo service ssh restart
+          
+          # 启动ngrok隧道
+          rm -f .ngrok.log
+          ./ngrok tcp 22 --log ".ngrok.log" &
+          sleep 10
+          # 检查是否有错误
+          HAS_ERRORS=$(grep "command failed" <.ngrok.log)
+          
+          if [[ -z "$HAS_ERRORS" ]]; then
+            echo ""
+            echo "=========================================="
+            echo '连接: '"$(grep -o -E 'tcp://(.+)' < .ngrok.log | head -n 1 | sed 's/tcp:\/\//ssh '"$(whoami)"'@/' | sed 's/:/ -p /')"
+            echo "=========================================="
+          else
+            echo "$HAS_ERRORS"
+            exit 4
+          fi
           
       - name: Build Go
         env:
@@ -51,11 +76,11 @@ jobs:
           sudo apt-get install -y llvm-15 clang-15 git make
           export CLANG=clang-15
           
-          # 克隆仓库
+          # 克隆仓库 - 修复了分支克隆的逻辑错误
           if [ -n "${BRANCH}" ]; then
-            git clone https://github.com/daeuniverse/dae.git dae
-          else 
             git clone https://github.com/daeuniverse/dae.git -b ${BRANCH} dae
+          else 
+            git clone https://github.com/daeuniverse/dae.git dae
           fi
           
           # 执行构建
