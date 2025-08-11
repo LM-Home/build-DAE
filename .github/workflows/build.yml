@@ -1,0 +1,79 @@
+name: build DAE
+
+on:
+  repository_dispatch:
+  workflow_dispatch:
+    inputs:
+      ssh:
+        description: 'SSH Connection to Actions'
+        required: false
+        default: 'false'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        platform: [ubuntu-latest]
+        go-version: [ '1.23.0' ]
+    
+    name: Build
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+  
+      - name: SSH Connection to Actions
+        if: (github.event.inputs.ssh == 'true' || contains(github.event.action, 'ssh')
+        env:
+          NGROK_TOKEN: ${{ secrets.NGROK_TOKEN }}
+          USER_PASS: ${{ secrets.USER_PASS }}
+        run:
+          chmod +X ngrok.sh
+          bash ngrok.sh
+          
+      - name: Build Go
+        run: |
+          set +e
+          sudo apt-get update 
+          sudo apt-get install -y llvm-15 clang-15 git make
+          export CLANG=clang-15
+          make OUTPUT=dae GOFLAGS="-buildvcs=false" CC=clang CGO_ENABLED=0
+          echo "FILESNAME=$PWD" >> $GITHUB_ENV
+  
+      - name: Bump Version and Push Tag
+        id: bump
+        uses: anothrNick/github-tag-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WITH_V: false
+
+      - name: Upload Go to Release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.bump.outputs.new_tag }}
+          files: ${{ env.FILESNAME }}/DAE-*
+
+      - name: Delete Workflow Runs
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          retain_days: 1
+          keep_minimum_runs: 3
+
+      - name: Remove Old Releases
+        uses: dev-drprasad/delete-older-releases@v0.1.0
+        with:
+          keep_latest: 3
+          delete_tags: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
