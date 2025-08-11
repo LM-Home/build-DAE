@@ -43,7 +43,8 @@ jobs:
           if [ -z "$src" ]; then
             src="{}"
           fi
-          echo $src
+          
+          echo $BRANCH
           
           IFS=$'\n' read -d '' -ra oldID < <(echo "$src" | jq -r --arg branch "$BRANCH" '.[$branch]')
           if [ "$oldID" = "null" ]; then
