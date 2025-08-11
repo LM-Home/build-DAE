@@ -4,14 +4,14 @@ on:
   repository_dispatch:
   workflow_dispatch:
     inputs:
+      ssh:
+        description: 'SSH连接'
+        required: false
+        default: 'false'
       branch:
         description: '编译特定分支'
         required: false
         default: ''
-      ssh:
-        description: 'SSH Connection to Actions'
-        required: false
-        default: 'false'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -38,6 +38,7 @@ jobs:
           NGROK_TOKEN: ${{ secrets.NGROK_TOKEN }}
           USER_PASS: ${{ secrets.USER_PASS }}
         run: |
+          ls
           chmod +x ngrok.sh
           bash ngrok.sh
           
