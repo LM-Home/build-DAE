@@ -4,18 +4,10 @@ on:
   repository_dispatch:
   workflow_dispatch:
     inputs:
-      ssh:
-        description: 'SSH连接'
-        required: false
-        default: 'false'
       branch:
         description: '编译特定分支'
         required: false
         default: ''
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
 
 jobs:
   build:
@@ -31,13 +23,6 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
-  
-      - name: SSH Connection to Actions
-        if: (github.event.inputs.ssh == 'true' || contains(github.event.action, 'ssh'))
-        uses: luchihoratiu/debug-via-ssh@main
-        with:
-          NGROK_AUTH_TOKEN: ${{ secrets.NGROK_TOKEN }}
-          SSH_PASS: ${{ secrets.USER_PASS }}
           
       - name: Build Go
         env:
