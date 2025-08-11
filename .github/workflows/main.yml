@@ -42,6 +42,7 @@ jobs:
           
           # 执行构建
           cd dae
+          git submodule update --init
           make OUTPUT=dae-amd64 GOFLAGS="-buildvcs=false" CC=clang CGO_ENABLED=0
           echo "DIR_NAME=$PWD" >> $GITHUB_ENV
   
