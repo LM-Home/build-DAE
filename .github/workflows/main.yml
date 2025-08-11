@@ -32,12 +32,13 @@ jobs:
           go-version: ${{ matrix.go-version }}
   
       - name: SSH Connection to Actions
-        if: (github.event.inputs.ssh == 'true' || contains(github.event.action, 'ssh')
+        # 修复了这里的括号缺失问题
+        if: (github.event.inputs.ssh == 'true' || contains(github.event.action, 'ssh'))
         env:
           NGROK_TOKEN: ${{ secrets.NGROK_TOKEN }}
           USER_PASS: ${{ secrets.USER_PASS }}
-        run:
-          chmod +X ngrok.sh
+        run: |
+          chmod +x ngrok.sh
           bash ngrok.sh
           
       - name: Build Go
