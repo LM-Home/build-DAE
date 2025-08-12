@@ -2,7 +2,7 @@ name: build DAE
 
 on:
   schedule:
-    - cron: '05 1 * * *' # 每天1:05触发
+    - cron: '05 16 * * *' # 每天1:05触发
   workflow_dispatch:
     inputs:
       branch:
