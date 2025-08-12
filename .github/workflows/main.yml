@@ -53,7 +53,12 @@ jobs:
           echo "旧ID: $oldID"
 
           # 获取最新的commit ID
-          newID=$(curl -s -H "Accept: application/json" "https://github.com/${WAREHOUSE}/commits/deferred_commit_data/main?original_branch=main" | jq -r '.deferredCommits[0].oid')
+          newID=$(curl -s -H "Accept: application/json" "https://github.com/${WAREHOUSE}/commits/deferred_commit_data/${BRANCH}?original_branch=${BRANCH}" | jq -r '.deferredCommits[0].oid')
+          if  [ "$newID" = "null" ]; then
+            echo "未获取到 https://github.com/${WAREHOUSE}/tree/${BRANCH} 的 commit ID."
+            echo "needs_build=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
           echo "新ID: $newID"
           
           # 保存新ID到环境变量供后续步骤使用
