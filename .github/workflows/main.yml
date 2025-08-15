@@ -64,10 +64,14 @@ jobs:
           oldID=$(echo "$src" | jq -r --arg branch "$BRANCH" '.[$branch] // empty')
           echo "旧ID: $oldID"
 
-          # 获取最新的commit ID
-          newID=$(curl -s -H "Accept: application/json" "https://github.com/${WAREHOUSE}/commits/deferred_commit_data/${BRANCH}?original_branch=${BRANCH}" | jq -r '.deferredCommits[0].oid')
-          if  [ "$newID" = "null" ]; then
-            echo "未获取到 https://github.com/${WAREHOUSE}/tree/${BRANCH} 的 commit ID."
+          # 使用官方 API 并添加认证
+          response=$(curl -s -H "Accept: application/json" -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/${WAREHOUSE}/git/refs/heads/${BRANCH}")
+
+          # 检查 API 是否返回成功
+          if echo "$response" | jq -e . >/dev/null 2>&1; then
+            newID=$(echo "$response" | jq -r '.object.sha')
+          else
+            echo "API 响应无效: $response"
             echo "needs_build=false" >> $GITHUB_OUTPUT
             exit 1
           fi
