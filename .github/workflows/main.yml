@@ -2,7 +2,7 @@ name: build DAE
 
 on:
   schedule:
-    - cron: '05 16 * * *' # 每天1:05触发
+    - cron: '05 16 * * *' # 每天 1:05 触发
   workflow_dispatch:
     inputs:
       branch:
@@ -15,8 +15,8 @@ on:
         default: 'daeuniverse/dae'
  
 env:
-  BRANCH: ${{ github.event.inputs.branch }}
-  WAREHOUSE: ${{ github.event.inputs.warehouse }}
+  BRANCH: ${{ github.event.inputs.branch || 'main' }}
+  WAREHOUSE: ${{ github.event.inputs.warehouse || 'daeuniverse/dae' }}
         
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -62,6 +62,11 @@ jobs:
           fi
 
           oldID=$(echo "$src" | jq -r --arg branch "$BRANCH" '.[$branch] // empty')
+          if [ "$oldID" = "" ] || [ "$oldID" = "null" ]; then
+            echo "获取 Old ID 失败，退出构建。"
+            echo "needs_build=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
           echo "旧ID: $oldID"
 
           # 使用官方 API 并添加认证
@@ -70,6 +75,11 @@ jobs:
           # 检查 API 是否返回成功
           if echo "$response" | jq -e . >/dev/null 2>&1; then
             newID=$(echo "$response" | jq -r '.object.sha')
+            if [ "$newID" = "" ] || [ "$newID" = "null" ]; then
+              echo "获取 New ID 失败，退出构建。"
+              echo "needs_build=false" >> $GITHUB_OUTPUT
+              exit 1
+            fi
           else
             echo "API 响应无效: $response"
             echo "needs_build=false" >> $GITHUB_OUTPUT
