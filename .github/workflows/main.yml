@@ -62,10 +62,13 @@ jobs:
           fi
 
           oldID=$(echo "$src" | jq -r --arg branch "$BRANCH" '.[$branch] // empty')
-          if [ "$oldID" = "" ] || [ "$oldID" = "null" ]; then
-            echo "获取 Old ID 失败，退出构建。"
-            echo "needs_build=false" >> $GITHUB_OUTPUT
-            exit 1
+          # 在 src 不为空的情况下，检查 oldID
+          if [ "$src" != "{}" ]; then
+            if [ "$oldID" = "" ] || [ "$oldID" = "null" ]; then
+              echo "获取 Old ID 失败，退出构建。"
+              echo "needs_build=false" >> $GITHUB_OUTPUT
+              exit 1
+            fi
           fi
           echo "旧ID: $oldID"
 
